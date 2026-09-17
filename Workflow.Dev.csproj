@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Root entry point: build the API, then run it with its own launch settings. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <IsPackable>false</IsPackable>
+    <RunCommand>dotnet</RunCommand>
+    <RunArguments>run --project &quot;$(MSBuildProjectDirectory)/services/Workflow.Api&quot; --configuration $(Configuration) --no-build --launch-profile http</RunArguments>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="services/Workflow.Api/Workflow.Api.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>

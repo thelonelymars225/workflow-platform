@@ -11,10 +11,14 @@ Small .NET 10 / EF Core API for creating and listing workflow definitions. Pair 
 Run from this repository root. First, the API can start **without a database**:
 
 ```sh
-dotnet restore WorkflowBackend.sln --disable-parallel
-dotnet build WorkflowBackend.sln --no-restore /m:1
-dotnet test WorkflowBackend.sln --no-restore /m:1
-dotnet run --project services/Workflow.Api --launch-profile http
+dotnet run
+```
+
+The root `Workflow.Dev.csproj` builds and starts the API using its HTTP launch profile.
+For hot reload, run:
+
+```sh
+dotnet watch --project services/Workflow.Api run --launch-profile http
 ```
 
 Open `http://localhost:5159/health` (or `/api/health`) for liveness, and `http://localhost:5159/openapi/v1.json` for the Development-only OpenAPI document. There is no Swagger UI. Liveness does not promise database readiness. `/health/db` checks connectivity; workflow operations also require the migration below. The existing `/weatherforecast` sample is unchanged.
