@@ -4,10 +4,10 @@ namespace Workflow.Api.Models;
 
 public sealed class CreateWorkflowRequest
 {
-    [Required, StringLength(200)]
+    [Required, StringLength(200), NoNullCharacters]
     public string? Name { get; init; }
 
-    [StringLength(2000)]
+    [StringLength(2000), NoNullCharacters]
     public string? Description { get; init; }
 }
 

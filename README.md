@@ -61,7 +61,7 @@ The seed is disabled by default and ignored outside Development. Its fixed ID an
 - `GET /api/workflows`: 200 with an array, including `[]` when empty.
 - `POST /api/workflows`: JSON `{ "name": "First workflow", "description": null }`; 201 with the saved DTO and a `Location` header.
 - `GET /api/workflows/{id}`: 200 with the DTO, or 404 for an unknown UUID.
-- Missing/blank/overlong names and overlong descriptions: 400 validation problem. Missing/unreachable database: safe 503 problem; no connection string or stack trace in responses.
+- Missing/blank/overlong names, overlong descriptions, and null characters (`\u0000`) in either field: 400 validation problem. Request validation runs even when the database is missing or unreachable. Valid requests that need a missing/unreachable database return a safe 503 problem; no connection string or stack trace in responses.
 
 After starting PostgreSQL, applying migrations, and starting both apps:
 
@@ -72,14 +72,26 @@ After starting PostgreSQL, applying migrations, and starting both apps:
 5. Stop the API and refresh/submit: visible errors must preserve input. Restart it with PostgreSQL unavailable: liveness stays 200 and workflow requests/readiness return 503.
 6. Restart twice with the seed enabled and verify the sample ID `65f64362-d031-4dca-a7af-85991e7a08c0` occurs once.
 
-Unit tests and SQL script generation do **not** verify persistence. Applying the migration, seed repeatability, successful CRUD, and browser create/refresh/API-restart persistence require a real PostgreSQL server. They were not verified in the restricted setup environment, which could not start PostgreSQL as an unprivileged user.
+## Automated tests
+
+`dotnet test WorkflowBackend.sln` runs DTO validation and in-process HTTP tests, including invalid requests with missing/unreachable database configuration and safe 503 responses. PostgreSQL integration tests are explicitly skipped unless `WORKFLOW_TEST_POSTGRES` is set.
+
+To run the database tests, use a dedicated development PostgreSQL server and a test account with `CREATE DATABASE` permission. The supplied connection is used to create a randomly named `workflow_tests_*` database for each test; only those generated databases are dropped afterward. The supplied database is never migrated or seeded.
+
+```sh
+export WORKFLOW_TEST_POSTGRES='Host=localhost;Port=5432;Database=postgres;Username=YOUR_TEST_ADMIN;Password=REPLACE_ME'
+dotnet test WorkflowBackend.sln
+unset WORKFLOW_TEST_POSTGRES
+```
+
+The integration tests apply migrations to empty databases and verify create/list/get/404, input boundaries, rejected null characters without inserted rows, persistence across API host restarts, and repeated startup seeding without changing the sample row. A configured but unavailable test server fails these tests rather than skipping them. No Docker dependency is required. Browser behavior still needs the manual smoke check above; these backend tests do not exercise Angular.
 
 ## Code map and troubleshooting
 
 - `services/Workflow.Api/Program.cs`: configuration, scoped context, safe errors, health and Development OpenAPI/seed.
 - `Controllers/WorkflowsController.cs` and `Models/WorkflowDtos.cs` (under the API): list/create/get and boundary validation.
 - `Data/WorkflowDbContext.cs`, `Data/Migrations`, `Data/DevelopmentSeed.cs`: PostgreSQL schema and opt-in seed.
-- `tests/Workflow.Tests`: validation tests; the notification test project has no tests yet.
+- `tests/Workflow.Tests`: DTO validation, HTTP regression tests, and opt-in PostgreSQL integration tests; the notification test project has no tests yet.
 - `services/Notification.Worker` and `contracts`: existing scaffolding, not involved in workflow CRUD.
 
 503 "not configured": set the connection key above and restart. 503 "unavailable": check PostgreSQL is running, credentials/port/database are correct, and migrations were applied. `/health/db` can succeed before tables exist, so also test `/api/workflows`. HTTP development does not need a trusted HTTPS certificate. If port 5159 is occupied, stop the other process or change the HTTP profile and the frontend's `proxy.conf.json` together. OpenAPI is intentionally unavailable outside Development. Production hosting/authentication and the existing Compose placeholders are outside this local setup.

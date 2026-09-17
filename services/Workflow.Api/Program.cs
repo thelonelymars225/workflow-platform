@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Workflow.Api.Data;
+using Workflow.Api.Filters;
 
 var builder = WebApplication.CreateBuilder(args);
 
 var connectionString = builder.Configuration.GetConnectionString("WorkflowDatabase");
 var databaseConfigured = !string.IsNullOrWhiteSpace(connectionString);
 builder.Services.AddDbContext<WorkflowDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddScoped<WorkflowDatabaseRequiredFilter>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
@@ -22,12 +24,6 @@ app.Use(async (context, next) =>
 {
     try
     {
-        if (!databaseConfigured && (context.Request.Path.StartsWithSegments("/api/workflows") || context.Request.Path == "/health/db"))
-        {
-            await Results.Problem(statusCode: 503, title: "Database is not configured",
-                detail: "Set ConnectionStrings:WorkflowDatabase on the API. See the backend README.").ExecuteAsync(context);
-            return;
-        }
         await next(context);
     }
     catch (Exception exception) when (!context.Response.HasStarted && !context.RequestAborted.IsCancellationRequested)
@@ -55,6 +51,9 @@ app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapGet("/health/db", async (WorkflowDbContext db, CancellationToken cancellationToken) =>
 {
+    if (!databaseConfigured)
+        return Results.Problem(statusCode: 503, title: "Database is not configured",
+            detail: "Set ConnectionStrings:WorkflowDatabase on the API. See the backend README.");
     if (await db.Database.CanConnectAsync(cancellationToken)) return Results.Ok(new { status = "ok" });
     app.Logger.LogWarning("Database connectivity check failed. Check ConnectionStrings:WorkflowDatabase and PostgreSQL availability.");
     return Results.Problem(statusCode: 503, title: "Database is unavailable", detail: "Check the API database configuration and PostgreSQL.");

@@ -1,11 +1,13 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Workflow.Api.Data;
+using Workflow.Api.Filters;
 using Workflow.Api.Models;
 
 namespace Workflow.Api.Controllers;
 
 [ApiController]
+[ServiceFilter(typeof(WorkflowDatabaseRequiredFilter))]
 [Route("api/workflows")]
 [Produces("application/json")]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status503ServiceUnavailable)]
