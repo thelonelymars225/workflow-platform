@@ -8,16 +8,23 @@ Small .NET 10 / EF Core API for creating and listing workflow definitions. Pair 
 - A running PostgreSQL 16+ development server; create a dedicated database and role with permission to create tables. Npgsql EF provider is pinned to 10.0.1.
 - Frontend: Node 24 LTS, npm 11, Angular 21.2 (see its README).
 
-Run from this repository root. First, the API can start **without a database**:
+Run these commands from this repository root to restore, build, and test:
 
 ```sh
 dotnet restore WorkflowBackend.sln --disable-parallel
 dotnet build WorkflowBackend.sln --no-restore /m:1
 dotnet test WorkflowBackend.sln --no-restore /m:1
+```
+
+You can optionally check that the API starts **without a database**:
+
+```sh
 dotnet run --project services/Workflow.Api --launch-profile http
 ```
 
-Open `http://localhost:5159/health` (or `/api/health`) for liveness, and `http://localhost:5159/openapi/v1.json` for the Development-only OpenAPI document. There is no Swagger UI. Liveness does not promise database readiness. `/health/db` checks connectivity; workflow operations also require the migration below. The existing `/weatherforecast` sample is unchanged.
+Open `http://localhost:5159/health` (or `/api/health`) for liveness, and `http://localhost:5159/openapi/v1.json` for the Development-only OpenAPI document. Then press **Ctrl+C** in the API terminal before configuring PostgreSQL below. The **Start both apps** section starts it again with your database configuration.
+
+There is no Swagger UI. Liveness does not promise database readiness. `/health/db` checks connectivity; workflow operations also require the migration below. The existing `/weatherforecast` sample is unchanged.
 
 ## PostgreSQL configuration and migration
 
@@ -43,10 +50,12 @@ Keep credentials out of tracked files. Configure a local user secret (replace al
 ```sh
 dotnet user-secrets set 'ConnectionStrings:WorkflowDatabase' 'Host=localhost;Port=5432;Database=workflow_dev;Username=workflow_dev;Password=REPLACE_ME' --project services/Workflow.Api
 dotnet tool restore
-dotnet ef database update --project services/Workflow.Api
+ASPNETCORE_ENVIRONMENT=Development dotnet ef database update --project services/Workflow.Api
 ```
 
-Alternatively set `ConnectionStrings__WorkflowDatabase` in the API process environment. User secrets are loaded in Development; when running EF outside a Development shell, set `ASPNETCORE_ENVIRONMENT=Development` to use them. The initial migration creates `Workflows` with UUID ID, required name (200 characters), optional description (2,000 characters), and UTC created/updated timestamps. The API uses one scoped `WorkflowDbContext`; it never auto-migrates or calls `EnsureCreated`.
+These commands use macOS/Linux shell syntax. In PowerShell, set `$env:ASPNETCORE_ENVIRONMENT = 'Development'` before running the `dotnet ef` command. Development mode lets EF read the user secret. Alternatively set `ConnectionStrings__WorkflowDatabase` in the API process environment.
+
+The initial migration creates `Workflows` with UUID ID, required name (200 characters), optional description (2,000 characters), and UTC created/updated timestamps. The API uses one scoped `WorkflowDbContext`; it never auto-migrates or calls `EnsureCreated`.
 
 Optional seed, only after applying migrations:
 
@@ -55,6 +64,25 @@ dotnet run --project services/Workflow.Api --launch-profile http -- --Developmen
 ```
 
 The seed is disabled by default and ignored outside Development. Its fixed ID and `ON CONFLICT DO NOTHING` make repeated/concurrent starts idempotent without overwriting existing data. Disable it by omitting the argument. Seed failure stops startup with an actionable diagnostic.
+
+## Start both apps
+
+After configuring PostgreSQL and applying the migration, use two terminals. Leave both processes running while checking the browser.
+
+In the backend repository:
+
+```sh
+dotnet run --project services/Workflow.Api --launch-profile http
+```
+
+In a second terminal, from the frontend repository:
+
+```sh
+npm ci
+npm start
+```
+
+Open `http://localhost:4200/workflows` to create and list records in PostgreSQL. The frontend root opens the Atlas preview, whose sample tasks are stored separately in the browser. The Angular development proxy forwards `/api` requests to `http://localhost:5159`; its address is configured in the frontend's `proxy.conf.json`.
 
 ## Endpoints and smoke check
 
@@ -65,12 +93,14 @@ The seed is disabled by default and ignored outside Development. Its fixed ID an
 
 After starting PostgreSQL, applying migrations, and starting both apps:
 
-1. Open `http://localhost:4200`, check API connected and the empty list (with seed disabled on a fresh database).
+1. Open `http://localhost:4200/workflows`, check **API connected** and **No workflows yet** (with seed disabled on a fresh database). The API connection status checks liveness; a successful list confirms the database is ready.
 2. Create a named workflow, optionally with a description; confirm one new row in the list and record its ID.
 3. Refresh the browser, stop/restart the API, and refresh again: the same ID must remain. Retrieve it directly at `/api/workflows/{id}`; request another valid UUID to check 404.
-4. Submit a whitespace name in the UI; directly POST `{ "name": " " }` to check API 400. Check name/description limits too.
+4. Submit a whitespace name in the UI; it must show validation without sending a create request. Directly POST `{ "name": " " }` to check API 400. The UI accepts up to 200 characters for the name and 2,000 for the description; the API must also reject requests over these limits.
 5. Stop the API and refresh/submit: visible errors must preserve input. Restart it with PostgreSQL unavailable: liveness stays 200 and workflow requests/readiness return 503.
 6. Restart twice with the seed enabled and verify the sample ID `65f64362-d031-4dca-a7af-85991e7a08c0` occurs once.
+
+Record the backend/frontend commit IDs, runtime versions, browser, and outcomes of these checks in the pull request. A frontend unit test with mocked HTTP responses does not verify PostgreSQL persistence.
 
 ## Automated tests
 
