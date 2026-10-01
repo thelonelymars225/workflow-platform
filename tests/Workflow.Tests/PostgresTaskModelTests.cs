@@ -17,15 +17,17 @@ public class PostgresTaskModelTests : IAsyncLifetime
     {
         await database.MigrateAsync();
         var now = DateTimeOffset.UtcNow.TruncateToMicroseconds();
-        var owner = Guid.NewGuid();
+        MinimalOrg org;
+        await using (var setup = database.CreateContext()) org = await MinimalOrg.CreateAsync(setup);
+        var owner = org.UserId;
         var personal = new PersonalTask
         {
-            Id = Guid.NewGuid(), Title = "مهمة شخصية", Status = PersonalTaskStatus.InProgress,
+            Id = Guid.NewGuid(), OrganizationId = org.OrganizationId, DepartmentId = org.DepartmentId, Title = "مهمة شخصية", Status = PersonalTaskStatus.InProgress,
             OwnerUserId = owner, CreatedAt = now, UpdatedAt = now
         };
         var automation = new AutomationTask
         {
-            Id = Guid.NewGuid(), Name = "Nightly sync", Status = AutomationTaskStatus.Active,
+            Id = Guid.NewGuid(), OrganizationId = org.OrganizationId, DepartmentId = org.DepartmentId, Name = "Nightly sync", Status = AutomationTaskStatus.Active,
             OwnerUserId = owner, CreatedAt = now, UpdatedAt = now
         };
         var failed = new AutomationRun
@@ -67,14 +69,16 @@ public class PostgresTaskModelTests : IAsyncLifetime
     {
         await database.MigrateAsync();
         await using var db = database.CreateContext();
+        var org = await MinimalOrg.CreateAsync(db);
+        var (o, d, u) = (org.OrganizationId, org.DepartmentId, org.UserId);
         var id = Guid.NewGuid();
         await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "PersonalTasks" ("Id", "Title", "Status", "OwnerUserId", "CreatedAt", "UpdatedAt")
-            VALUES ({id}, {"Bad"}, {"Archived"}, {id}, now(), now())
+            INSERT INTO "PersonalTasks" ("Id", "OrganizationId", "DepartmentId", "Title", "Status", "OwnerUserId", "CreatedAt", "UpdatedAt")
+            VALUES ({id}, {o}, {d}, {"Bad"}, {"Archived"}, {u}, now(), now())
             """));
         await db.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "AutomationTasks" ("Id", "Name", "Status", "OwnerUserId", "CreatedAt", "UpdatedAt")
-            VALUES ({id}, {"Ok"}, {"Active"}, {id}, now(), now())
+            INSERT INTO "AutomationTasks" ("Id", "OrganizationId", "DepartmentId", "Name", "Status", "OwnerUserId", "CreatedAt", "UpdatedAt")
+            VALUES ({id}, {o}, {d}, {"Ok"}, {"Active"}, {u}, now(), now())
             """);
         await Assert.ThrowsAsync<Npgsql.PostgresException>(() => db.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "AutomationRuns" ("Id", "AutomationTaskId", "Status", "Attempt", "QueuedAt")

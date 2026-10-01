@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Workflow.Api.Data;
 using Workflow.Api.Filters;
+using Workflow.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +10,8 @@ var connectionString = builder.Configuration.GetConnectionString("WorkflowDataba
 var databaseConfigured = !string.IsNullOrWhiteSpace(connectionString);
 builder.Services.AddDbContext<WorkflowDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddScoped<WorkflowDatabaseRequiredFilter>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddScoped<OrgHierarchyService>();
 
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
