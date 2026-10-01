@@ -1,9 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using Workflow.Api.Data;
 using Workflow.Api.Models;
 
 namespace Workflow.Tests;
@@ -17,37 +14,13 @@ public sealed class PostgresFactAttribute : FactAttribute
     }
 }
 
-// Each test creates and drops only its own randomly named database, never the supplied database.
 public class PostgresWorkflowTests : IAsyncLifetime
 {
-    private readonly string databaseName = "workflow_tests_" + Guid.NewGuid().ToString("N");
-    private readonly string? adminConnection = Environment.GetEnvironmentVariable("WORKFLOW_TEST_POSTGRES");
-    private string connectionString = "";
-    private bool databaseCreated;
+    private readonly PostgresTestDatabase database = new();
+    private string ConnectionString => database.ConnectionString;
 
-    public async Task InitializeAsync()
-    {
-        if (string.IsNullOrWhiteSpace(adminConnection)) return;
-        await using var admin = new NpgsqlConnection(adminConnection);
-        await admin.OpenAsync();
-        await using var command = new NpgsqlCommand($"CREATE DATABASE \"{databaseName}\"", admin);
-        await command.ExecuteNonQueryAsync();
-        databaseCreated = true;
-        connectionString = new NpgsqlConnectionStringBuilder(adminConnection)
-        {
-            Database = databaseName,
-            Pooling = false
-        }.ConnectionString;
-    }
-
-    public async Task DisposeAsync()
-    {
-        if (!databaseCreated) return;
-        await using var admin = new NpgsqlConnection(adminConnection);
-        await admin.OpenAsync();
-        await using var command = new NpgsqlCommand($"DROP DATABASE \"{databaseName}\" WITH (FORCE)", admin);
-        await command.ExecuteNonQueryAsync();
-    }
+    public Task InitializeAsync() => database.InitializeAsync();
+    public Task DisposeAsync() => database.DisposeAsync();
 
     [PostgresFact]
     [Trait("Category", "PostgreSQL")]
@@ -55,7 +28,7 @@ public class PostgresWorkflowTests : IAsyncLifetime
     {
         await MigrateAsync();
         WorkflowResponse saved;
-        await using (var app = new WorkflowApiFactory(connectionString))
+        await using (var app = new WorkflowApiFactory(ConnectionString))
         {
             using var client = app.CreateClient();
             Assert.Empty((await client.GetFromJsonAsync<WorkflowResponse[]>("/api/workflows"))!);
@@ -81,7 +54,7 @@ public class PostgresWorkflowTests : IAsyncLifetime
         WorkflowResponse? firstSeed = null;
         for (var restart = 0; restart < 2; restart++)
         {
-            await using var app = new WorkflowApiFactory(connectionString, seed: true);
+            await using var app = new WorkflowApiFactory(ConnectionString, seed: true);
             using var client = app.CreateClient();
             var rows = (await client.GetFromJsonAsync<WorkflowResponse[]>("/api/workflows"))!;
             Assert.Equal(2, rows.Length);
@@ -97,7 +70,7 @@ public class PostgresWorkflowTests : IAsyncLifetime
     public async Task RejectsNullCharactersWithoutWritingRowsAndAcceptsBoundaryLengths()
     {
         await MigrateAsync();
-        await using var app = new WorkflowApiFactory(connectionString);
+        await using var app = new WorkflowApiFactory(ConnectionString);
         using var client = app.CreateClient();
         foreach (var (name, description, field) in new[]
         {
@@ -120,11 +93,5 @@ public class PostgresWorkflowTests : IAsyncLifetime
         Assert.Equal(2, (await client.GetFromJsonAsync<WorkflowResponse[]>("/api/workflows"))!.Length);
     }
 
-    private async Task MigrateAsync()
-    {
-        await using var db = new WorkflowDbContext(new DbContextOptionsBuilder<WorkflowDbContext>()
-            .UseNpgsql(connectionString).Options);
-        await db.Database.MigrateAsync();
-        Assert.Empty(await db.Database.GetPendingMigrationsAsync());
-    }
+    private Task MigrateAsync() => database.MigrateAsync();
 }

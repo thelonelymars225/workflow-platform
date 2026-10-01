@@ -55,7 +55,7 @@ ASPNETCORE_ENVIRONMENT=Development dotnet ef database update --project services/
 
 These commands use macOS/Linux shell syntax. In PowerShell, set `$env:ASPNETCORE_ENVIRONMENT = 'Development'` before running the `dotnet ef` command. Development mode lets EF read the user secret. Alternatively set `ConnectionStrings__WorkflowDatabase` in the API process environment.
 
-The initial migration creates `Workflows` with UUID ID, required name (200 characters), optional description (2,000 characters), and UTC created/updated timestamps. The API uses one scoped `WorkflowDbContext`; it never auto-migrates or calls `EnsureCreated`.
+The initial migration creates `Workflows` with UUID ID, required name (200 characters), optional description (2,000 characters), and UTC created/updated timestamps. The `PersonalAndAutomationTasks` migration adds `PersonalTasks` (ToDo, InProgress, Done, Cancelled), `AutomationTasks` (Active, Paused) and `AutomationRuns` (Queued, Running, Succeeded, Failed, Retrying; a manual retry is a new run linked by `RetryOfRunId`). Statuses are stored as strings with check constraints; allowed transitions live in `Domain/TaskLifecycle.cs`. The API uses one scoped `WorkflowDbContext`; it never auto-migrates or calls `EnsureCreated`.
 
 Optional seed, only after applying migrations:
 
@@ -121,6 +121,7 @@ The integration tests apply migrations to empty databases and verify create/list
 - `services/Workflow.Api/Program.cs`: configuration, scoped context, safe errors, health and Development OpenAPI/seed.
 - `Controllers/WorkflowsController.cs` and `Models/WorkflowDtos.cs` (under the API): list/create/get and boundary validation.
 - `Data/WorkflowDbContext.cs`, `Data/Migrations`, `Data/DevelopmentSeed.cs`: PostgreSQL schema and opt-in seed.
+- `Models/TaskEntities.cs` and `Domain/TaskLifecycle.cs`: personal/automation task entities and their status transition rules.
 - `tests/Workflow.Tests`: DTO validation, HTTP regression tests, and opt-in PostgreSQL integration tests; the notification test project has no tests yet.
 - `services/Notification.Worker` and `contracts`: existing scaffolding, not involved in workflow CRUD.
 
