@@ -97,3 +97,68 @@ public class WorkflowHttpTests
         Assert.Equal(expectedTitle, problem.Title);
     }
 }
+
+public class TaskIdentityHttpTests
+{
+    private static readonly string[] Paths = ["/api/tasks", "/api/automation-tasks", "/api/departments", $"/api/tasks/{Guid.NewGuid()}"];
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(WorkflowHttpTests.UnreachableDatabase)]
+    public async Task MissingOrMalformedDemoHeadersReturn401BeforeDatabaseChecks(string connection)
+    {
+        await using var app = new WorkflowApiFactory(connection);
+        using var client = app.CreateClient();
+        foreach (var path in Paths)
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            Assert.Contains("X-Demo-User-Id", problem!.Detail);
+        }
+        using var malformed = new HttpRequestMessage(HttpMethod.Get, "/api/tasks");
+        malformed.Headers.Add("X-Demo-User-Id", "not-a-guid");
+        malformed.Headers.Add("X-Organization-Id", Guid.NewGuid().ToString());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.SendAsync(malformed)).StatusCode);
+    }
+
+    [Fact]
+    public async Task DemoHeadersAreIgnoredOutsideDevelopment()
+    {
+        await using var app = new WorkflowApiFactory("", environment: "Production");
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Demo-User-Id", Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add("X-Organization-Id", Guid.NewGuid().ToString());
+        foreach (var path in Paths)
+        {
+            using var response = await client.GetAsync(path);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+            Assert.DoesNotContain("X-Demo-User-Id", problem!.Detail);
+        }
+    }
+
+    [Fact]
+    public async Task IdentifiedCallerWithoutDatabaseGetsSafe503()
+    {
+        await using var app = new WorkflowApiFactory("");
+        using var client = app.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Demo-User-Id", Guid.NewGuid().ToString());
+        client.DefaultRequestHeaders.Add("X-Organization-Id", Guid.NewGuid().ToString());
+        using var response = await client.GetAsync("/api/tasks");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/api/tasks?status=Archived")]
+    [InlineData("/api/tasks?page=0")]
+    [InlineData("/api/tasks?pageSize=201")]
+    [InlineData("/api/automation-tasks?status=Done")]
+    public async Task InvalidQueryValuesReturn400(string path)
+    {
+        await using var app = new WorkflowApiFactory("");
+        using var client = app.CreateClient();
+        using var response = await client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+}
