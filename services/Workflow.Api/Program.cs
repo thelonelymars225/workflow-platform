@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Workflow.Api.Data;
+using Workflow.Api.Data.Seeding;
 using Workflow.Api.Filters;
 using Workflow.Api.Identity;
 using Workflow.Api.Services;
@@ -88,6 +89,34 @@ if (app.Environment.IsDevelopment() && builder.Configuration.GetValue<bool>("Dev
         throw new InvalidOperationException("Development seed failed. Check PostgreSQL and apply migrations first.");
     }
 }
+// Scenario seeding: --Development:SeedScenario=<name|a,b|all> and/or --Development:ResetData=true (Development only).
+var seedScenario = builder.Configuration["Development:SeedScenario"];
+var resetData = builder.Configuration.GetValue<bool>("Development:ResetData");
+if (!string.IsNullOrWhiteSpace(seedScenario) || resetData)
+{
+    if (!app.Environment.IsDevelopment())
+        app.Logger.LogWarning("Development:SeedScenario and Development:ResetData are ignored outside Development.");
+    else
+    {
+        var scenarios = ScenarioSeeder.ParseScenarios(seedScenario);
+        if (!databaseConfigured) throw new InvalidOperationException("Scenario seeding requires ConnectionStrings:WorkflowDatabase.");
+        using var scope = app.Services.CreateScope();
+        try
+        {
+            var summary = await ScenarioSeeder.RunAsync(scope.ServiceProvider.GetRequiredService<WorkflowDbContext>(), scenarios, resetData,
+                scope.ServiceProvider.GetRequiredService<TimeProvider>().GetUtcNow());
+            app.Logger.LogInformation("Development scenarios ready: {Scenarios} (reset: {Reset}, rows inserted: {Rows}).",
+                summary.Scenarios.Count == 0 ? "none" : string.Join(", ", summary.Scenarios), summary.Reset, summary.RowsInserted);
+        }
+        catch (Exception exception)
+        {
+            app.Logger.LogError("Scenario seed failed ({ErrorType}). Check PostgreSQL and apply migrations first.", exception.GetType().Name);
+            throw new InvalidOperationException("Scenario seed failed. Check PostgreSQL and apply migrations first.");
+        }
+        if (builder.Configuration.GetValue<bool>("Development:ExitAfterSeed")) return;
+    }
+}
+
 app.MapControllers();
 app.Run();
 

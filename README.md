@@ -65,6 +65,26 @@ dotnet run --project services/Workflow.Api --launch-profile http -- --Developmen
 
 The seed is disabled by default and ignored outside Development. Its fixed ID and `ON CONFLICT DO NOTHING` make repeated/concurrent starts idempotent without overwriting existing data. Disable it by omitting the argument. Seed failure stops startup with an actionable diagnostic.
 
+### Org scenarios (Development only)
+
+Five deterministic scenarios exercise the organization and access rules. One command resets the org/task tables and seeds a scenario (after applying migrations):
+
+```sh
+dotnet run --project services/Workflow.Api --launch-profile http -- --Development:SeedScenario=messy --Development:ResetData=true
+```
+
+- `--Development:SeedScenario=`: `startup` (5 people, flat, 1 admin), `midsize` (~50 people, head office + 5 departments), `enterprise` (300 people, 5 levels, 8,000 tasks, 200 automation tasks with runs in every outcome), `agency` (30 staff shared across the agency and 3 client orgs with different roles), `messy` (Al-Noor Holding / مجموعة النور, 45 people, quirks M1-M16; it also seeds `agency` for the shared contractor). Use a comma-separated list or `all`.
+- `--Development:ResetData=true` truncates organizations, users, departments, memberships, access exceptions, delegations and tasks (never `Workflows`) before seeding. It can be used alone.
+- `--Development:ExitAfterSeed=true` stops after seeding instead of starting the API.
+
+Both flags are ignored outside Development and seeding is off by default. IDs derive from stable keys (`Data/Seeding/SeedIds.cs`) and rows are inserted with `ON CONFLICT DO NOTHING`, so repeated runs insert nothing and never overwrite local edits. Messy acting-manager and expiry windows are relative to the seeding time; reset to refresh them. Named messy fixtures (people, departments, tasks) are in `Data/Seeding/MessyScenario.cs` (`MessyFixtures`). Example request as the messy CEO:
+
+```sh
+curl -H 'X-Demo-User-Id: <MessyFixtures.People.Ceo>' -H 'X-Organization-Id: <MessyFixtures.Organization>' http://localhost:5159/api/tasks
+```
+
+Find IDs with `psql`: `SELECT u."Id", u."DisplayName", m."Role", m."OrganizationId" FROM "Users" u JOIN "Memberships" m ON m."UserId" = u."Id";`
+
 ## Start both apps
 
 After configuring PostgreSQL and applying the migration, use two terminals. Leave both processes running while checking the browser.
@@ -134,6 +154,7 @@ The integration tests apply migrations to empty databases and verify create/list
 - `Controllers/WorkflowsController.cs` and `Models/WorkflowDtos.cs` (under the API): list/create/get and boundary validation.
 - `Data/WorkflowDbContext.cs`, `Data/Migrations`, `Data/DevelopmentSeed.cs`: PostgreSQL schema and opt-in seed.
 - `Models/TaskEntities.cs` and `Domain/TaskLifecycle.cs`: personal/automation task entities and their status transition rules.
+- `Data/Seeding`: deterministic Development scenarios and the reset/seed command.
 - `Models/OrgEntities.cs`, `Domain/DepartmentPaths.cs`, `Services/OrgHierarchyService.cs`: organization structure, materialized paths, subtree/ancestor/team queries, nearest-manager fallback and cycle-safe moves.
 - `tests/Workflow.Tests`: DTO validation, HTTP regression tests, and opt-in PostgreSQL integration tests; the notification test project has no tests yet.
 - `services/Notification.Worker` and `contracts`: existing scaffolding, not involved in workflow CRUD.
