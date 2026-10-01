@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Workflow.Api.Data;
+using Workflow.Api.Domain;
 using Workflow.Api.Filters;
 using Workflow.Api.Models;
 
@@ -42,7 +43,8 @@ public class WorkflowsController(WorkflowDbContext db) : ControllerBase
             return ValidationProblem(ModelState);
         }
 
-        var now = DateTimeOffset.UtcNow;
+        // PostgreSQL stores microseconds; truncate so the 201 body equals what a later GET returns.
+        var now = DateTimeOffset.UtcNow.TruncateToMicroseconds();
         var row = new WorkflowDefinition
         {
             Id = Guid.NewGuid(), Name = request.Name.Trim(), Description = request.Description?.Trim(),
