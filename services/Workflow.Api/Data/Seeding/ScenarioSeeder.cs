@@ -16,12 +16,11 @@ public static class ScenarioSeeder
         ["messy"] = MessyScenario.Build,
     };
 
-    // Org and task tables, in an order that satisfies the foreign keys. Workflows are never touched.
-    private static readonly string[] ResetTables =
-    [
-        "AutomationRuns", "AutomationTasks", "PersonalTasks", "ActingManagerDelegations", "AccessExceptions",
-        "DepartmentMemberships", "Memberships", "Departments", "Users", "Organizations"
-    ];
+    // Org and task tables only; Workflows are never touched.
+    private const string ResetSql = """
+        TRUNCATE "AutomationRuns", "AutomationTasks", "PersonalTasks", "ActingManagerDelegations", "AccessExceptions",
+            "DepartmentMemberships", "Memberships", "Departments", "Users", "Organizations" CASCADE
+        """;
 
     // Accepts a comma-separated list ("startup,messy") or "all"; throws before touching the database if a name is unknown.
     public static IReadOnlyList<string> ParseScenarios(string? value)
@@ -50,8 +49,7 @@ public static class ScenarioSeeder
         db.Database.SetCommandTimeout(TimeSpan.FromMinutes(5));
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken);
         if (reset)
-            await db.Database.ExecuteSqlRawAsync(
-                "TRUNCATE " + string.Join(", ", ResetTables.Select(x => $"\"{x}\"")) + " CASCADE", cancellationToken);
+            await db.Database.ExecuteSqlRawAsync(ResetSql, cancellationToken);
 
         var rows = 0;
         rows += await InsertIgnore.RunAsync(db, set.Organizations, cancellationToken);
