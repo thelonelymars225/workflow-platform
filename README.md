@@ -155,6 +155,7 @@ unset WORKFLOW_TEST_POSTGRES
 - `Data/WorkflowDbContext.cs`, `Data/Migrations`, `Data/DevelopmentSeed.cs`: PostgreSQL schema and opt-in seed.
 - `Models/TaskEntities.cs` and `Domain/TaskLifecycle.cs`: personal/automation task entities and their status transition rules.
 - `Data/Seeding`: deterministic Development scenarios and the reset/seed command.
+- `docs/perf/enterprise-seed.md` and `docs/perf/measure_task_list.py`: task list timings and query plans on the enterprise seed.
 - `Models/OrgEntities.cs`, `Domain/DepartmentPaths.cs`, `Services/OrgHierarchyService.cs`: organization structure, materialized paths, subtree/ancestor/team queries, nearest-manager fallback and cycle-safe moves.
 - `tests/Workflow.Tests`: DTO validation, HTTP regression tests, and opt-in PostgreSQL integration tests; the notification test project has no tests yet.
 - `services/Notification.Worker` and `contracts`: existing scaffolding, not involved in workflow CRUD.

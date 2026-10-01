@@ -46,6 +46,12 @@ public class WorkflowDbContext(DbContextOptions<WorkflowDbContext> options) : Db
             entity.HasOne<Membership>().WithMany().HasForeignKey(x => new { x.OrganizationId, x.AssigneeUserId })
                 .HasPrincipalKey(x => new { x.OrganizationId, x.UserId }).OnDelete(DeleteBehavior.Restrict);
             entity.HasIndex(x => new { x.OrganizationId, x.AssigneeUserId });
+            // Match the list order (newest first) so whole-org pages read the index instead of sorting every row;
+            // see docs/perf/enterprise-seed.md.
+            entity.HasIndex(x => new { x.OrganizationId, x.CreatedAt, x.Id }, "IX_PersonalTasks_Org_CreatedAt_Id")
+                .IsDescending(false, true, true);
+            entity.HasIndex(x => new { x.OrganizationId, x.Status, x.CreatedAt, x.Id }, "IX_PersonalTasks_Org_Status_CreatedAt_Id")
+                .IsDescending(false, false, true, true);
         });
 
         modelBuilder.Entity<AutomationTask>(entity =>
