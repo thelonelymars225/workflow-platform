@@ -9,6 +9,9 @@ public enum AutomationRunStatus { Queued, Running, Succeeded, Failed, Retrying }
 public class PersonalTask
 {
     public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    // Visibility follows this department, not the owner's current department.
+    public Guid DepartmentId { get; set; }
     public string Title { get; set; } = "";
     public string? Description { get; set; }
     public PersonalTaskStatus Status { get; set; }
@@ -22,6 +25,8 @@ public class PersonalTask
 public class AutomationTask
 {
     public Guid Id { get; set; }
+    public Guid OrganizationId { get; set; }
+    public Guid DepartmentId { get; set; }
     public string Name { get; set; } = "";
     public string? Description { get; set; }
     public AutomationTaskStatus Status { get; set; }
