@@ -1,7 +1,9 @@
+using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Workflow.Api.Data;
 using Workflow.Api.Filters;
+using Workflow.Api.Identity;
 using Workflow.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,8 +14,17 @@ builder.Services.AddDbContext<WorkflowDbContext>(options => options.UseNpgsql(co
 builder.Services.AddScoped<WorkflowDatabaseRequiredFilter>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<OrgHierarchyService>();
+builder.Services.AddScoped<TaskScopeResolver>();
+builder.Services.AddScoped<CallerIdentityRequiredFilter>();
+builder.Services.AddScoped<CallerScopeRequiredFilter>();
+// Header-based demo identity exists only in Development; everywhere else task endpoints return 401 until real auth lands.
+if (builder.Environment.IsDevelopment())
+    builder.Services.AddSingleton<ICallerIdentityProvider, DevelopmentHeaderCallerIdentityProvider>();
+else
+    builder.Services.AddSingleton<ICallerIdentityProvider, NoCallerIdentityProvider>();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options => options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(allowIntegerValues: false)));
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
 

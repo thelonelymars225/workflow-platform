@@ -91,6 +91,18 @@ Open `http://localhost:4200/workflows` to create and list records in PostgreSQL.
 - `GET /api/workflows/{id}`: 200 with the DTO, or 404 for an unknown UUID.
 - Missing/blank/overlong names, overlong descriptions, and null characters (`\u0000`) in either field: 400 validation problem. Request validation runs even when the database is missing or unreachable. Valid requests that need a missing/unreachable database return a safe 503 problem; no connection string or stack trace in responses.
 
+### Tasks and organization access
+
+There is no authentication yet. In Development only, the caller is taken from the `X-Demo-User-Id` and `X-Organization-Id` headers (UUIDs); outside Development every task endpoint returns 401. Both live behind `ICallerIdentityProvider` (`Identity/CallerIdentity.cs`) so real auth can replace them. Missing/malformed headers: 401 (before database checks). No active membership in that organization: 403.
+
+- `GET /api/tasks?status=&page=1&pageSize=50`: personal tasks visible to the caller, newest first, `{ items, page, pageSize, totalCount }` (page size 1-200).
+- `GET /api/tasks/{id}`; `POST /api/tasks` `{ title, description?, departmentId, assigneeUserId?, dueAt? }`; `PATCH /api/tasks/{id}/status` `{ status }`.
+- `GET /api/automation-tasks?status=&page=&pageSize=`, `GET /api/automation-tasks/{id}`, `POST /api/automation-tasks` `{ name, description?, departmentId, status? }`, `PATCH /api/automation-tasks/{id}/status`.
+- `GET /api/automation-tasks/{id}/runs?page=&pageSize=`; `POST /api/automation-tasks/{id}/runs/{runId}/retry` creates a new queued run (201).
+- `GET /api/departments`: the caller's organization tree with each department's effective (fallback) manager.
+
+Tasks the caller cannot see return 404 (also for other organizations); visible but read-only tasks return 403 on mutation; invalid status transitions return 409 with the allowed next statuses. `Services/TaskScopeResolver.cs` and `Domain/AccessPolicy.cs` implement the precedence: cross-org block, then own/assigned tasks, then deny, then grant or active acting manager, then role (Admin: whole org; Manager: managed departments and descendants; Member: nothing extra).
+
 After starting PostgreSQL, applying migrations, and starting both apps:
 
 1. Open `http://localhost:4200/workflows`, check **API connected** and **No workflows yet** (with seed disabled on a fresh database). The API connection status checks liveness; a successful list confirms the database is ready.
