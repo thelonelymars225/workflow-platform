@@ -146,7 +146,7 @@ dotnet test WorkflowBackend.sln
 unset WORKFLOW_TEST_POSTGRES
 ```
 
-The integration tests apply migrations to empty databases and verify create/list/get/404, input boundaries, rejected null characters without inserted rows, persistence across API host restarts, and repeated startup seeding without changing the sample row. A configured but unavailable test server fails these tests rather than skipping them. No Docker dependency is required. Browser behavior still needs the manual smoke check above; these backend tests do not exercise Angular.
+`tests/Workflow.Tests/Scenarios` seeds each scenario once per test class and checks visibility through the HTTP API with the demo headers; the messy tests are named after their quirk (`M1_…` to `M16_…`). The integration tests apply migrations to empty databases and verify create/list/get/404, input boundaries, rejected null characters without inserted rows, persistence across API host restarts, and repeated startup seeding without changing the sample row. A configured but unavailable test server fails these tests rather than skipping them. No Docker dependency is required. Browser behavior still needs the manual smoke check above; these backend tests do not exercise Angular.
 
 ## Code map and troubleshooting
 
